@@ -39,7 +39,79 @@ cd frontend && npm test
 | `GET/POST /groups/{id}/settlements`, `DELETE .../settlements/{sid}` | Payments |
 | `GET /groups/{id}/balances` | Balances and suggested payments |
 
-## Design
-See [explanation/PROJECT_EXPLANATION.md](explanation/PROJECT_EXPLANATION.md) for the design,
-including how money is stored as cents, why balances always sum to zero, the
-minimum-payments algorithm, validation, and authentication.
+## How it works
+
+1. **Create a group** and add the people sharing costs.
+2. **Add expenses.** Choose who paid and who shares it.
+   - **Equal split:** the amount is divided evenly. Leftover cents go to the first members, so
+     ₹100 ÷ 3 = 33.34 + 33.33 + 33.33.
+   - **Exact split:** you enter each person's share, and the shares must add up to the total.
+3. **Check balances.** A positive balance means the member **gets money back**; a negative one
+   means they **owe**. All balances always add up to exactly zero.
+4. **Settle up.** The app lists the fewest payments that clear every debt. Click **Record** when
+   a payment is made, and the balances update.
+
+### Example
+Asha pays ₹900 for dinner, split equally between Asha, Ben and Chitra. Then Ben pays ₹300 for a
+taxi shared by Ben and Chitra.
+
+| Member | Paid | Share | Balance |
+|---|---|---|---|
+| Asha | 900 | 300 | **+600** (gets back) |
+| Ben | 300 | 450 | **−150** (owes) |
+| Chitra | 0 | 450 | **−450** (owes) |
+
+Suggested payments: **Chitra → Asha ₹450** and **Ben → Asha ₹150**. That's 2 payments, the minimum.
+
+## Project structure
+
+```
+backend/   Spring Boot REST API
+  domain/        JPA entities (group, member, expense, share, settlement, user, session)
+  repository/    Database access with Spring Data JPA
+  service/       Business rules and validation
+  settlement/    Split and minimum-payment algorithms (pure Java)
+  auth/          Login, logout, token check
+  web/           Controllers, request/response DTOs, error handling
+frontend/  React + TypeScript client
+  pages/         Login, group list, group details
+  components/    Expense form, balances, members, payments
+  api.ts         All calls to the backend
+explanation/     Detailed design notes
+```
+
+## Example request
+
+```http
+POST /api/groups/1/expenses
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{ "description": "Dinner", "amount": "900.00", "paidByMemberId": 1, "splitType": "EQUAL",
+  "splits": [{ "memberId": 1 }, { "memberId": 2 }, { "memberId": 3 }] }
+```
+
+Invalid input gets a clear error message:
+
+```json
+{ "status": 400, "message": "splits must add up to the expense amount 50.00 but add up to 40.00" }
+```
+
+The API returns **400** for invalid input, **401** when you're not logged in, **404** when
+something isn't found, and **409** for conflicts such as a duplicate member name.
+
+## Key design decisions
+- **Money is stored as whole cents (`long`),** not floating point, so there are no rounding
+  errors.
+- **Balances are calculated from expenses and payments** every time, never stored, so they
+  can't drift out of sync.
+- **Minimum payments:** for groups of up to 20 people with non-zero balances, an exact
+  dynamic-programming algorithm finds the true minimum. Larger groups use a greedy fallback.
+- **Security:**
+  - passwords are hashed with BCrypt
+  - login tokens are random, and only their hash is stored
+  - logging out ends the session immediately
+  - users can only see their own groups
+
+See [explanation/PROJECT_EXPLANATION.md](explanation/PROJECT_EXPLANATION.md) for the full design
+notes.
