@@ -6,26 +6,47 @@ Track shared expenses in a group and settle up with the fewest payments.
 
 ## Features
 - Sign up, log in, log out. Each account's groups are private.
-- Create and delete groups; add, rename and remove members.
+- Create and delete groups; add, rename and remove members. A member can only be removed if
+  they have no expenses or payments, which keeps past records intact.
 - Add expenses split **equally** or by **exact amounts**.
 - Live balances that always sum to exactly zero.
 - Suggested payments using the **minimum number of transactions**.
 - Record payments. Data is stored in a database, so it survives restarts.
 
 ## Run
-Requires JDK 21+, Maven, and Node 20.19+.
+Requires JDK 21+, Maven, and Node 20.19+. Use **two terminals**, because each command keeps
+running.
 
 ```bash
-cd backend && mvn spring-boot:run      # API on http://localhost:8080
-cd frontend && npm install && npm run dev   # UI on http://localhost:5173
+# Terminal 1: API on http://localhost:8080
+cd backend
+mvn spring-boot:run
+```
+
+```bash
+# Terminal 2: UI on http://localhost:5173
+cd frontend
+npm install
+npm run dev
 ```
 
 Open http://localhost:5173 and sign up.
 
+**Where data is stored:** in `data/expenses.mv.db`, inside the folder you start the backend from.
+Starting it from `backend/` (as above) uses `backend/data/`. Starting it from an IDE whose
+working directory is the project root uses `data/` at the root, which is a separate, empty
+database. Always start the backend from the same folder. To reset all data, stop the backend
+and delete the `data` folder.
+
+**Currency:** amounts are shown in ₹ (INR) by default. To use another currency, set it in
+`frontend/.env`, e.g. `VITE_CURRENCY=USD`.
+
 ## Test
+From the project root:
+
 ```bash
-cd backend && mvn test
-cd frontend && npm test
+(cd backend && mvn test)
+(cd frontend && npm test)
 ```
 
 ## API (all under `/api`, Bearer token required except register/login)
@@ -91,7 +112,8 @@ Content-Type: application/json
   "splits": [{ "memberId": 1 }, { "memberId": 2 }, { "memberId": 3 }] }
 ```
 
-Invalid input gets a clear error message:
+Invalid input gets a clear error message. This example is abridged: the full response also
+includes `timestamp` and `error`, and `fieldErrors` when a specific field is at fault.
 
 ```json
 { "status": 400, "message": "splits must add up to the expense amount 50.00 but add up to 40.00" }
